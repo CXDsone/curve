@@ -12,6 +12,11 @@ float anglePoint[512];
 int tim = 0;
 int msec = 200;
 int middle = 0;
+QByteArray dataRead;
+float set_angle;
+float min_angle;
+float multiple;
+
 /**
  * @brief setParameters
  * 0：单位，0 N ,1 g
@@ -23,9 +28,7 @@ int middle = 0;
  * 6：y轴最大
  */
 int setParameters[7];
-float set_angle;
-float min_angle;
-float multiple;
+
 
 
 MainWindow::MainWindow(QWidget *parent) :
@@ -211,82 +214,144 @@ void MainWindow::noDesTimeRun()
     }
 }
 
-int MainWindow::Destructive()
+void MainWindow::Destructive()
 {
-    timer = new QTimer(this);
-    connect(timer,SIGNAL(timeout()),this,SLOT(DesTimeRun()));
-    memset(loadPoint,0,512);
-    memset(loadPoint,0,512);
-    tim = 0;
-    loadPoint[tim] = getValue();
-    if(wait4Forward(1) == -1)
-        return -1;
-    //定时查询
-    timer->start(msec);
+    GetLoad(2);
+    waitTaskInfo(50);
+//    dataRead += serialRead();
+    GetSwitch(1);
+    waitTaskInfo(10);
+    dataRead += serialRead();
+//    readDes();
 }
 
-void MainWindow::DesTimeRun(){
-    QTime *t = new QTime;
-    int value = getValue();
-    int message = wait4GetSwitch(1);
-    qDebug("%d",t->elapsed());
-    if(message == 1)
+void MainWindow::readDes()
+{
+    int signal = 0;
+    QByteArray loadHead;
+    loadHead[0] = 0x02;
+    loadHead[1] = 0x03;
+    QByteArray switchHead;
+    switchHead[0] = 0x01;
+    switchHead[1] = 0x02;
+    while(dataRead.size()>=6)
     {
-        tim++;
-        loadPoint[tim] = value;
-    }
-    else if(message == 0)
-    {
-        if(tim == 0)
+        if(signal%2 == 0)
         {
-            loadPoint[tim] = value;
-            qDebug("%d",value);
-        }
-        else {
-            wait4StopRun(1);
-            timer->stop();
-            QLineSeries *series = new QLineSeries();
-            int row_count = ui->TW_csv->rowCount();
-            int col_count = ui->TW_csv->columnCount();
-            ui->TW_csv->setColumnCount(col_count+2);
-            if(row_count<tim+1)
-                ui->TW_csv->setRowCount(tim+1);
-            for(int i = 0; i < tim; i++) {
-                series->append((loadPoint[i]-loadPoint[0])*multiple,i*((double)360/60000*msec));
-                setItem(i,col_count,i*((double)360/60000*msec));
-                setItem(i,col_count+1,loadPoint[i]-loadPoint[0]);
+            //查询压力值
+            int head = dataRead.indexOf(loadHead);
+            if(head>=0)
+            {
+                dataRead.remove(0,head);
+                if(dataRead.size() >= 9)
+                {
+                    unsigned char checkSum[2];
+                    unsigned char data[7];
+                    memset(checkSum,0,2);
+                    memset(data,0,7);
+                    for(int i=0;i<7;i++)
+                        data[i] = (unsigned char)(dataRead.at(i));
+                    unsigned short CRC = CRC_GetModbus16(data,7);
+                    checkSum[0] = CRC%256;
+                    checkSum[1] = CRC/256;
+                    if((unsigned char)(dataRead.at(7)) == checkSum[0]&&(unsigned char)(dataRead.at(8)) == checkSum[1])
+                    {
+                        loadPoint[signal/2] = (unsigned char)(dataRead.at(4))
+                              +((unsigned char)(dataRead.at(3))<<8)
+                              +((unsigned char)(dataRead.at(6))<<16)
+                              +((unsigned char)(dataRead.at(5))<<32);
+                        anglePoint[signal/2] = (signal/2)*((double)360/60000*msec);
+                        qDebug("%d",loadPoint);
+                    }
+                    signal++;
+                    dataRead.remove(0,9);
+                }
             }
-            series->append(0,(tim+1)*((double)360/60000*msec));
-            setItem(tim+1,col_count,(tim+1)*((double)360/60000*msec));
-            setItem(tim+1,col_count+1,0);
-            chart->addSeries(series);
-            chart->setAxisX(axisX, series);
-            chart->setAxisY(axisY, series);
-            ui->graphicsView->setChart(chart);
-            qDebug("%f",(double)360/60000*msec);
-            //最大值高亮
+        }
+        if(signal%2 == 1)
+        {
+            int head = dataRead.indexOf(switchHead);
+            if(head>=0)
+            {
+                dataRead.remove(0,head);
+                if(dataRead.size() >= 6)
+                {
+                    unsigned char checkSum[2];
+                    unsigned char data[4];
+                    memset(checkSum,0,2);
+                    memset(data,0,4);
+                    for(int i=0;i<4;i++)
+                        data[i] = (unsigned char)(dataRead.at(i));
+                    unsigned short CRC = CRC_GetModbus16(data,4);
+                    checkSum[0] = CRC%256;
+                    checkSum[1] = CRC/256;
+                    if((unsigned char)(dataRead.at(4)) == checkSum[0]||(unsigned char)(dataRead.at(5)) == checkSum[1])
+                    {
+                        dataRead.remove(0,6);
+                        if(data[3] == 0x00)
+                        {
+                            qDebug("CID:I4 OFF");
+                            break;
+                        }
+
+                    }
+                    signal++;
+                    dataRead.remove(0,6);
+                }
+            }
         }
     }
+    //绘制曲线
+    wait4StopRun(1);
+    timer->stop();
+    QLineSeries *series = new QLineSeries();
+    int row_count = ui->TW_csv->rowCount();
+    int col_count = ui->TW_csv->columnCount();
+    ui->TW_csv->setColumnCount(col_count+2);
+    if(row_count<tim+1)
+        ui->TW_csv->setRowCount(tim+1);
+    for(int i = 0; i < tim; i++) {
+        series->append((loadPoint[i]-loadPoint[0])*multiple,i*((double)360/60000*msec));
+        setItem(i,col_count,i*((double)360/60000*msec));
+        setItem(i,col_count+1,loadPoint[i]-loadPoint[0]);
+    }
+    series->append(0,(tim+1)*((double)360/60000*msec));
+    setItem(tim+1,col_count,(tim+1)*((double)360/60000*msec));
+    setItem(tim+1,col_count+1,0);
+    chart->addSeries(series);
+    chart->setAxisX(axisX, series);
+    chart->setAxisY(axisY, series);
+    ui->graphicsView->setChart(chart);
+    qDebug("%f",(double)360/60000*msec);
+    //最大值高亮
 }
 
 void MainWindow::on_PB_check_clicked()
 {
     int rbID = btnGrout->checkedId();
+    timer = new QTimer(this);
+    memset(loadPoint,0,512);
+    memset(anglePoint,0,512);
+    dataRead.clear();
+    wait4Setup(1,1,10);
+    wait4SetPul(1,40000*setParameters[2]/360);
+    wait4RunMotor(1);
+    while(!wait4GetSwitch(1));
+    wait4StopRun(1);
     //破坏性测试
     if(rbID == 0)
-        Destructive();
+    {
+        connect(timer,SIGNAL(timeout()),this,SLOT(Destructive()));
+        wait4SetPul(1,40000*setParameters[2]/360);
+        wait4RunMotor(1);
+        timer->start(msec);
+    }
     //非破坏性测试
     else if(rbID == 1)
     {
         QString str = ui->LE_angel->text();
         int angel = str.toInt();
-        timer = new QTimer(this);
         connect(timer,SIGNAL(timeout()),this,SLOT(noDestructive()));
-        wait4Setup(1,1,10);
-        wait4SetPul(1,60000*setParameters[2]/360);
-        wait4RunMotor(1);
-        while(!wait4GetSwitch(1));
-        wait4StopRun(1);
         tim = 0;
         loadPoint[tim] = getValue();
         anglePoint[tim] = 0;

@@ -55,12 +55,13 @@ void waitTaskInfo(int tim);
 bool createSerialPort(unsigned int baudRate);
 void setSerialPort(unsigned int baudRate);
 void closeSerialPort();
+unsigned short CRC_GetModbus16(unsigned char *pdata, int len);
 
 
 void PackageSend1(QSerialPort* uartfd,int DID, struct Package1 data);
 
-void GetLoad(QSerialPort* uartfd,int DID);   //0x03 获取载重
-void GetSwitch(QSerialPort* uartfd,int DID); //0x02 输入状态
+void GetLoad(int DID);   //0x03 获取载重
+void GetSwitch(int DID); //0x02 输入状态
 
 int wait4GetLoad(int DID);                  //发送获取载重指令
 int wait4GetSwitch(int DID);                //发送获取输入状态
@@ -82,6 +83,6 @@ int wait4Forward(int DID);
 int wait4StopRun(int DID);
 int readData2();
 
-
+QByteArray serialRead();
 
 #endif // UART4STM_H

@@ -148,7 +148,7 @@ void PackageSend1(QSerialPort* uartfd,int DID, struct Package1 data)
     uartfd->write(dataMsg,8);
 }
 
-void GetLoad(QSerialPort* uartfd,int DID)//0x03 获取载重
+void GetLoad(int DID)//0x03 获取载重
 {
     struct Package1 Pack;
     Pack.CmdID =CID_GET_LOAD;
@@ -158,11 +158,11 @@ void GetLoad(QSerialPort* uartfd,int DID)//0x03 获取载重
     Pack.RegisterNum[0] = 0x00;
     Pack.RegisterNum[1] = 0x02;
 
-    PackageSend1(uartfd,DID,Pack);
+    PackageSend1(myCom,DID,Pack);
 }
 
 
-void GetSwitch(QSerialPort *uartfd, int DID)
+void GetSwitch(int DID)
 {
     struct Package1 Pack;
     Pack.CmdID = CID_GET_SWITCH;
@@ -172,7 +172,7 @@ void GetSwitch(QSerialPort *uartfd, int DID)
     Pack.RegisterNum[0] = 0X00;
     Pack.RegisterNum[1] = 0X08;
 
-    PackageSend1(uartfd,DID,Pack);
+    PackageSend1(myCom,DID,Pack);
 }
 
 int wait4GetLoad(int DID)//发送获取载重指令
@@ -180,7 +180,7 @@ int wait4GetLoad(int DID)//发送获取载重指令
     int i,j;
     for(i=0;i<3;i++)
     {
-        GetLoad(myCom,DID);
+        GetLoad(DID);
         for(j=0;j<5;j++)
         {
             int rtnState = readData1(DID);
@@ -201,7 +201,7 @@ int wait4GetSwitch(int DID)
     int i,j;
     for(i=0;i<3;i++)
     {
-        GetSwitch(myCom,DID);
+        GetSwitch(DID);
         for(j=0;j<5;j++)
         {
             int rtnState = readData1(DID);
@@ -582,5 +582,14 @@ int readData2()
     }
 }
 
+/******************接收数据***************************/
+
+QByteArray serialRead(){
+    if(myCom->bytesAvailable() > 0)
+    {
+        QByteArray alldata = myCom->readAll();
+        return alldata;
+    }
+}
 
 

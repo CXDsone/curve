@@ -40,7 +40,7 @@ public:
     ~MainWindow();
 
 public slots:
-    void DesTimeRun();
+    void Destructive();         //破坏性测试
     void noDestructive();       //非破坏性测试
     void noDesTimeRun();
 private slots:
@@ -92,10 +92,12 @@ private:
 
     int Touch();
     int getValue();
-
-    int Destructive();                  //破坏性测试
     void drawChart();
     void setItem(int row,int col,float value);
+    void readDes();
+    int readSwitch();
+
+
 };
 
 #endif // MAINWINDOW_H
